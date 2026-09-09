@@ -1,0 +1,15 @@
+{
+  "name": "NER-LIRP Sensor Operator",
+  "short_name": "NER Sensor",
+  "description": "Drive the virtual sensor network — rainfall, soil moisture, ground movement",
+  "start_url": "/sensor.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#5c4013",
+  "theme_color": "#5c4013",
+  "icons": [
+    { "src": "/icons/icon-sensor-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-sensor-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

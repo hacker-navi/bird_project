@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="description" content="NER-LIRP Citizen App — Report landslide hazards in Northeast India">
+<title>NER-LIRP · Citizen App</title>
+<link rel="stylesheet" href="css/style.css">
+<style>
+.photo-preview { width:100%; max-height:200px; object-fit:cover; border-radius:4px; border:1px solid var(--line); margin-bottom:8px; display:none; }
+.ai-result { padding:10px; border-radius:4px; font-size:12px; margin-top:8px; }
+.ai-result.match { background:var(--green-soft); border:1px solid var(--green); color:var(--green); }
+.ai-result.no-match { background:var(--orange-soft); border:1px solid var(--orange); color:var(--orange); }
+.ai-result.pending { background:var(--amber-soft); border:1px solid var(--amber); color:var(--amber); }
+.gps-badge { display:inline-flex; gap:6px; align-items:center; font-size:11.5px; padding:5px 10px; border-radius:4px; background:var(--green-soft); color:var(--green); font-weight:600; margin-bottom:8px; }
+.camera-btn { width:100%; padding:12px; background:var(--ink-900); color:#fff; border:none; border-radius:4px; font-size:13px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:8px; }
+.camera-btn:hover { filter:brightness(1.15); }
+.report-card { background:#fff; border:1px solid var(--line); border-radius:4px; padding:12px; margin-bottom:8px; font-size:12px; }
+.img-thumb { width:48px; height:48px; object-fit:cover; border-radius:3px; border:1px solid var(--line); flex-shrink:0; }
+</style>
+</head>
+<body style="background:var(--paper-dim);">
+
+<div class="phone-shell" style="box-shadow:0 0 40px rgba(0,0,0,0.08);">
+  <div class="phone-header">
+    <div class="phone-header__title">NER-LIRP</div>
+    <div class="phone-header__sub" id="citizen-location">Citizen App · Loading…</div>
+  </div>
+
+  <div class="phone-body">
+
+    <!-- LOGIN -->
+    <div id="screen-login">
+      <div class="card">
+        <div class="card__head"><h2>Citizen Login</h2></div>
+        <label class="field-label">Email</label>
+        <input type="email" id="login-email" value="citizen@example.com" style="margin-bottom:8px;">
+        <label class="field-label">Password</label>
+        <input type="password" id="login-password" value="demo1234" style="margin-bottom:12px;">
+        <button class="btn btn-primary" id="btn-login" style="width:100%;">Login</button>
+        <p class="muted" style="font-size:11px;margin-top:10px;">Demo credentials pre-filled.</p>
+      </div>
+    </div>
+
+    <!-- HOME -->
+    <div id="screen-home" style="display:none;">
+      <div class="risk-hero" id="risk-hero">
+        <div class="muted" style="color:#cdd9df;font-size:11px;">YOUR AREA RISK</div>
+        <div class="risk-hero__level" id="hero-level">—</div>
+        <div class="risk-hero__sub" id="hero-sub">Loading zone data…</div>
+      </div>
+
+      <div class="card">
+        <div class="card__head"><h2>Nearby Risk Zones</h2></div>
+        <div id="citizen-zones"></div>
+      </div>
+
+      <div class="card">
+        <div class="card__head"><h2>Active Alerts</h2></div>
+        <div id="citizen-alerts"><div class="empty-state">No active alerts</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card__head"><h2>🔔 Real Phone Alerts</h2></div>
+        <button class="btn btn-outline" id="btn-enable-push" style="width:100%;">Enable Real Alerts for My Area</button>
+        <div class="muted" id="push-status" style="font-size:11px;margin-top:6px;">Not enabled — you won't get lock-screen alerts</div>
+      </div>
+
+      <button class="btn btn-danger" id="btn-quick-report" style="width:100%;margin-bottom:8px;padding:14px;font-size:14px;">⚠ Report a Hazard</button>
+    </div>
+
+    <!-- REPORT INCIDENT -->
+    <div id="screen-report" style="display:none;">
+      <div class="card">
+        <div class="card__head"><h2>Report Hazard</h2></div>
+
+        <label class="field-label">Zone</label>
+        <select id="report-zone" style="margin-bottom:10px;"></select>
+
+        <label class="field-label">Incident Type</label>
+        <div class="incident-grid" id="incident-grid" style="margin-bottom:10px;"></div>
+
+        <label class="field-label">Description</label>
+        <textarea id="report-description" placeholder="Describe what you observed…" style="margin-bottom:10px;"></textarea>
+
+        <!-- GPS Section -->
+        <label class="field-label">📍 GPS Location</label>
+        <div id="gps-status" class="muted" style="margin-bottom:6px;font-size:11.5px;">Not captured</div>
+        <button class="btn btn-outline btn-sm" id="btn-capture-gps" style="margin-bottom:10px;">📍 Capture My Location</button>
+        <div id="gps-badge-container"></div>
+
+        <!-- Photo Section -->
+        <label class="field-label">📷 Photo Evidence</label>
+        <!-- Hidden file inputs for camera and gallery -->
+        <input type="file" id="photo-camera" accept="image/*" capture="environment" style="display:none;">
+        <input type="file" id="photo-gallery" accept="image/*" style="display:none;">
+        <img id="photo-preview" class="photo-preview" alt="Photo preview">
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <button class="camera-btn" id="btn-take-photo" style="flex:1;">📷 Camera</button>
+          <button class="camera-btn" id="btn-pick-photo" style="flex:1;background:var(--ink-700);">🖼 Gallery</button>
+        </div>
+        <div id="ai-analysis-result" style="display:none;"></div>
+
+        <div id="offline-banner" style="display:none;background:var(--amber-soft);color:var(--amber);padding:8px;border-radius:3px;font-size:11.5px;margin-bottom:10px;">
+          You're offline — this report will be queued and synced when connection returns.
+        </div>
+
+        <button class="btn btn-primary" id="btn-submit-report" style="width:100%;padding:13px;font-size:13px;">Submit Report</button>
+        <button class="btn btn-outline" id="btn-cancel-report" style="width:100%;margin-top:6px;">Cancel</button>
+      </div>
+    </div>
+
+    <!-- MY REPORTS -->
+    <div id="screen-myreports" style="display:none;">
+      <div class="card">
+        <div class="card__head"><h2>My Reports</h2></div>
+        <div id="my-reports-list"><div class="empty-state">No reports submitted yet</div></div>
+      </div>
+    </div>
+
+    <!-- SAFETY -->
+    <div id="screen-safety" style="display:none;">
+      <div class="card">
+        <div class="card__head"><h2>🛟 Safety Guidelines</h2></div>
+        <ul style="font-size:12.5px;line-height:1.9;padding-left:18px;">
+          <li>Move away from steep slopes during or after heavy rainfall.</li>
+          <li>Watch for new cracks in ground, walls, or roads — report immediately.</li>
+          <li>If you hear rumbling or see trees tilting, evacuate uphill immediately.</li>
+          <li>Keep emergency contacts saved and devices charged.</li>
+          <li>Follow government alerts and field agent instructions without delay.</li>
+          <li>Never re-enter an area after a landslide without official clearance.</li>
+        </ul>
+      </div>
+      <div class="card" style="background:var(--red-soft);border-color:var(--red);">
+        <strong style="color:var(--red);">Emergency Numbers</strong>
+        <div style="margin-top:8px;font-size:13px;line-height:1.8;">
+          🚨 NDRF: <strong>1078</strong><br>
+          🏥 Ambulance: <strong>108</strong><br>
+          🚒 Fire: <strong>101</strong><br>
+          👮 Police: <strong>100</strong>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="phone-tabbar">
+    <button data-screen="home" class="active">🏠<br>Home</button>
+    <button data-screen="report">⚠<br>Report</button>
+    <button data-screen="myreports">📋<br>My Reports</button>
+    <button data-screen="safety">🛟<br>Safety</button>
+  </div>
+</div>
+
+<div id="toast-stack"></div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="js/common.js"></script>
+<script src="js/push-client.js"></script>
+<script src="js/citizen.js"></script>
+</body>
+</html>

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="NER-LIRP Government Command Dashboard — AI-based Landslide Monitoring for Northeast India">
+<title>NER-LIRP · Government Command Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand__mark"></div>
+    <div class="brand__text">
+      <div class="brand__title">NER-LIRP</div>
+      <div class="brand__subtitle">Landslide Intelligence &amp; Response</div>
+    </div>
+  </div>
+  <nav class="topnav" id="topnav">
+    <button data-view="overview" class="active">Dashboard</button>
+    <button data-view="map">Risk Map</button>
+    <button data-view="zones">Risk Zones</button>
+    <button data-view="reports">Citizen Reports</button>
+    <button data-view="operations">Emergency Ops</button>
+    <button data-view="alerts">Alerts</button>
+    <button data-view="analytics">Analytics</button>
+    <button data-view="demo">Demo Control Panel</button>
+    <button data-view="admin">Admin</button>
+  </nav>
+  <div class="topbar__status">
+    <button class="btn btn-outline btn-sm" id="btn-export" style="color:#fff;border-color:rgba(255,255,255,0.25);">📄 Export Report</button>
+    <button class="btn btn-outline btn-sm" id="btn-enable-push" style="color:#fff;border-color:rgba(255,255,255,0.25);">🔔 Enable Alerts</button>
+    <span><span class="live-dot" id="live-dot"></span> <span id="live-label">Live</span></span>
+    <span class="muted" id="clock"></span>
+  </div>
+</div>
+
+<!-- ===================== OVERVIEW ===================== -->
+<div class="view active" id="view-overview">
+  <div class="section-head">
+    <div>
+      <h1>Command Overview</h1>
+      <p>North East Region · Meghalaya, Assam, Manipur · AI-Powered Early Warning</p>
+    </div>
+    <span class="badge outline" id="overview-updated">—</span>
+  </div>
+
+  <!-- Predictive alert banner -->
+  <div id="predictive-banner" style="display:none;background:var(--amber-soft);border:1px solid var(--amber);border-radius:3px;padding:10px 14px;margin-bottom:14px;font-size:12.5px;"></div>
+
+  <div class="summary-row" id="summary-cards"></div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card__head"><h2>Live Risk Map</h2><span class="muted">Click a marker for details</span></div>
+      <div id="map-overview" style="height:380px;border-radius:3px;border:1px solid var(--line);"></div>
+    </div>
+    <div class="card">
+      <div class="card__head"><h2>Live Activity Feed</h2><span class="muted" id="feed-count">0 events</span></div>
+      <div class="scroll-panel" id="activity-feed" style="max-height:380px;">
+        <div class="empty-state">Waiting for system events…</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card__head"><h2>Active Alerts</h2></div>
+      <div id="overview-alerts"><div class="empty-state">No active alerts</div></div>
+    </div>
+    <div class="card">
+      <div class="card__head"><h2>Pending Citizen Reports</h2></div>
+      <div id="overview-reports"><div class="empty-state">No pending reports</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MAP ===================== -->
+<div class="view" id="view-map">
+  <div class="section-head"><div><h1>Live GIS Risk Map</h1><p>Risk zones, monitoring nodes, citizen reports &amp; field agents</p></div></div>
+  <div class="grid-2">
+    <div class="card" style="padding:8px;">
+      <div id="map" ></div>
+    </div>
+    <div class="card">
+      <div class="card__head"><h2>Risk Zones</h2></div>
+      <div class="zone-list" id="map-zone-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== ZONES ===================== -->
+<div class="view" id="view-zones">
+  <div class="section-head"><div><h1>Risk Zone Details</h1><p>Village ABC — zones A through D</p></div></div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card__head"><h2>All Risk Zones</h2></div>
+      <div class="zone-list" id="zones-list"></div>
+    </div>
+    <div id="zone-detail-panel"></div>
+  </div>
+</div>
+
+<!-- ===================== CITIZEN REPORTS ===================== -->
+<div class="view" id="view-reports">
+  <div class="section-head"><div><h1>Citizen Report Management</h1><p>Review, verify and assign field agents to incoming reports</p></div></div>
+  <div class="card">
+    <table class="data-table" id="reports-table">
+      <thead><tr><th>Type</th><th>Zone</th><th>Description</th><th>Location</th><th>Time</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="empty-state" id="reports-empty" style="display:none;">No citizen reports yet</div>
+  </div>
+</div>
+
+<!-- ===================== OPERATIONS ===================== -->
+<div class="view" id="view-operations">
+  <div class="section-head"><div><h1>Emergency Operations</h1><p>Active incidents, assigned agents &amp; field verification</p></div></div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card__head"><h2>Active Assignments</h2></div>
+      <table class="data-table" id="assignments-table">
+        <thead><tr><th>Zone</th><th>Agent</th><th>Priority</th><th>Status</th><th>Assigned</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="empty-state" id="assignments-empty" style="display:none;">No active assignments</div>
+    </div>
+    <div class="card">
+      <div class="card__head"><h2>Field Agents</h2></div>
+      <div id="agents-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== ALERTS ===================== -->
+<div class="view" id="view-alerts">
+  <div class="section-head"><div><h1>Alert Management</h1><p>All alerts issued by the decision engine</p></div></div>
+  <div class="card">
+    <table class="data-table" id="alerts-table">
+      <thead><tr><th>Level</th><th>Title</th><th>Zone</th><th>Recommended Action</th><th>Time</th><th>Status</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ===================== ANALYTICS ===================== -->
+<div class="view" id="view-analytics">
+  <div class="section-head"><div><h1>Analytics</h1><p>Risk trends and system-wide statistics</p></div></div>
+  <div class="grid-3">
+    <div class="card"><div class="card__head"><h2>Risk Zone Statistics</h2></div><canvas id="chart-zones" height="180"></canvas></div>
+    <div class="card"><div class="card__head"><h2>Risk Score Trend</h2></div><canvas id="chart-trend" height="180"></canvas></div>
+    <div class="card"><div class="card__head"><h2>Rainfall Trend (24h)</h2></div><canvas id="chart-rain" height="180"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card__head"><h2>Select zone for trend charts</h2></div>
+    <select id="analytics-zone-select"></select>
+  </div>
+</div>
+
+<!-- ===================== DEMO CONTROL PANEL ===================== -->
+<div class="view" id="view-demo">
+  <div class="section-head">
+    <div><h1>Simulation / Demo Control Panel</h1><p>Drive the full connected workflow live for demonstration. Every action here is clearly labeled SIMULATED and updates the real risk engine.</p></div>
+  </div>
+  <div class="card" style="background:var(--amber-soft); border-color:var(--amber);">
+    <strong>Demo mode:</strong> values you set here are tagged <span class="src-tag simulated">SIMULATED</span> in the database and are never presented as live sensor data. Use this panel to run the SIH demonstration scenario end-to-end.
+  </div>
+
+  <div class="card">
+    <div class="card__head"><h2>Select Target Zone</h2></div>
+    <select id="demo-zone-select"></select>
+    <div class="hr"></div>
+    <div id="demo-current-risk"></div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card__head"><h2>Environmental Simulation</h2></div>
+
+      <div class="sim-control">
+        <div class="sim-control__head"><span>Rainfall (24h)</span><span class="sim-control__value" id="val-rainfall">40 mm</span></div>
+        <input type="range" id="slider-rainfall" min="0" max="250" value="40">
+      </div>
+
+      <div class="sim-control">
+        <div class="sim-control__head"><span>Soil Moisture</span><span class="sim-control__value" id="val-moisture">35 %</span></div>
+        <input type="range" id="slider-moisture" min="0" max="100" value="35">
+      </div>
+
+      <div class="sim-control">
+        <div class="sim-control__head"><span>Ground Movement</span><span class="sim-control__value" id="val-movement">0.5 mm</span></div>
+        <input type="range" id="slider-movement" min="0" max="25" step="0.5" value="0.5">
+      </div>
+
+      <div class="sim-control">
+        <div class="sim-toggle-row">
+          <span>Satellite Surface Change</span>
+          <button class="btn btn-outline btn-sm" id="btn-satellite">OFF → Trigger</button>
+        </div>
+      </div>
+
+      <div class="sim-control">
+        <div class="sim-toggle-row">
+          <span>Seismic Event (M4.5, 30km)</span>
+          <button class="btn btn-outline btn-sm" id="btn-seismic">Trigger</button>
+        </div>
+      </div>
+
+      <button class="btn btn-outline" id="btn-reset-zone" style="width:100%;margin-top:6px;">Reset Zone to Baseline</button>
+    </div>
+
+    <div class="card">
+      <div class="card__head"><h2>Evidence &amp; Response Simulation</h2></div>
+
+      <label class="field-label">Add Citizen Report</label>
+      <select id="demo-incident-type" style="margin-bottom:8px;">
+        <option>Road Crack</option><option>Ground Crack</option><option>Rock Fall</option>
+        <option>Mud Movement</option><option>Landslide</option><option>Flooding</option>
+        <option>Blocked Road</option><option>Other Hazard</option>
+      </select>
+      <button class="btn btn-primary" id="btn-add-report" style="width:100%;margin-bottom:14px;">Submit Citizen Report</button>
+
+      <label class="field-label">Assign Field Agent</label>
+      <button class="btn btn-primary" id="btn-assign-agent" style="width:100%;margin-bottom:14px;">Assign Nearest Available Agent</button>
+
+      <label class="field-label">Field Verification</label>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-success" id="btn-verify-confirm" style="flex:1;">Confirm Landslide</button>
+        <button class="btn btn-outline" id="btn-verify-false" style="flex:1;">False Alarm</button>
+      </div>
+
+      <div class="hr"></div>
+      <button class="btn btn-outline" id="btn-run-scenario" style="width:100%;">▶ Run Full Demo Scenario (Steps 1–15)</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card__head"><h2>Pipeline Trace</h2><span class="muted">Every step below triggered: recalculation → impact → decision → alert</span></div>
+    <div id="pipeline-trace" class="scroll-panel" style="max-height:260px;"><div class="empty-state">No simulation actions yet</div></div>
+  </div>
+</div>
+
+<!-- ===================== ADMIN ===================== -->
+<div class="view" id="view-admin">
+  <div class="section-head"><div><h1>Admin Portal</h1><p>Users, data sources &amp; audit logs</p></div></div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card__head"><h2>Users</h2></div>
+      <table class="data-table" id="users-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr></thead><tbody></tbody></table>
+    </div>
+    <div class="card">
+      <div class="card__head"><h2>Data Sources</h2></div>
+      <table class="data-table" id="sources-table"><thead><tr><th>Source</th><th>Type</th><th>Reliability</th><th>Status</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card__head"><h2>Audit Logs</h2></div>
+    <table class="data-table" id="audit-table"><thead><tr><th>Time</th><th>Action</th><th>Entity</th><th>Details</th></tr></thead><tbody></tbody></table>
+  </div>
+</div>
+
+<div id="toast-stack"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script src="js/common.js"></script>
+<script src="js/push-client.js"></script>
+<script src="js/dashboard.js"></script>
+</body>
+</html>

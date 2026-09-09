@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NER-LIRP</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body style="background:var(--paper-dim);">
+
+<div class="phone-shell" style="box-shadow:0 0 40px rgba(0,0,0,0.08);">
+  <div class="phone-header">
+    <div class="phone-header__title">NER-LIRP</div>
+    <div class="phone-header__sub">Choose how you're using this device</div>
+  </div>
+
+  <div class="phone-body">
+
+    <div class="card">
+      <div class="card__head"><h2>Real Alerts for This Phone</h2></div>
+      <p class="muted" style="font-size:11.5px;margin-top:-4px;">
+        Pick the zone nearest to where you live or are stationed. If that zone's risk
+        reaches WARNING level or above, a real notification will appear on this phone's
+        lock screen — even if the app isn't open.
+      </p>
+      <select id="zone-select" style="margin-bottom:10px;"></select>
+      <button class="btn btn-outline" id="btn-enable-push" style="width:100%;">🔔 Enable Real Alerts for This Area</button>
+      <div class="muted" id="push-status" style="font-size:11px;margin-top:6px;">Not enabled yet</div>
+    </div>
+
+    <div class="card" style="text-align:center;padding:28px 16px;cursor:pointer;" id="go-citizen">
+      <div style="font-size:34px;">🏠</div>
+      <h2 style="margin:8px 0 2px;">Citizen Mode</h2>
+      <p class="muted" style="font-size:12px;margin:0;">Report incidents, view local risk &amp; alerts</p>
+    </div>
+
+    <div class="card" style="text-align:center;padding:28px 16px;cursor:pointer;" id="go-agent">
+      <div style="font-size:34px;">🧭</div>
+      <h2 style="margin:8px 0 2px;">Field Agent Mode</h2>
+      <p class="muted" style="font-size:12px;margin:0;">View assignments &amp; submit field verification</p>
+    </div>
+
+    <div class="card">
+      <div class="card__head"><h2>Send a Test Alert</h2></div>
+      <p class="muted" style="font-size:11.5px;margin-top:-4px;">Confirms push notifications are actually reaching this device.</p>
+      <button class="btn btn-outline" id="btn-test-push" style="width:100%;">Send Test Notification</button>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast-stack"></div>
+
+<script src="js/common.js"></script>
+<script src="js/push-client.js"></script>
+<script>
+registerManifest('manifest-citizen.json', '#173f2b');
+
+let lZoneId = null;
+
+(async function loadZones() {
+  const zones = await apiGet('/risk-zones');
+  const sel = document.getElementById('zone-select');
+  sel.innerHTML = zones.map(z => `<option value="${z.id}">${z.code} · ${z.name}</option>`).join('');
+  sel.addEventListener('change', () => { lZoneId = sel.value; });
+  lZoneId = zones[0]?.id;
+})();
+
+document.getElementById('btn-enable-push').addEventListener('click', async () => {
+  const result = await enablePushNotifications({ appRole: 'CITIZEN', watchZoneId: lZoneId, deviceLabel: 'Citizen/Agent phone' });
+  const statusEl = document.getElementById('push-status');
+  if (result.ok) {
+    statusEl.textContent = '✅ Enabled — you will get real alerts for this zone';
+    toast('Push notifications enabled');
+  } else {
+    statusEl.textContent = '❌ ' + result.reason;
+    toast(result.reason, 'critical');
+  }
+});
+
+document.getElementById('btn-test-push').addEventListener('click', async () => {
+  if (!lZoneId) return toast('Select a zone first', 'warning');
+  const r = await apiPost('/push/test', { watch_zone_id: lZoneId });
+  toast(r.sent > 0 ? `Test sent to ${r.sent} device(s)` : 'No subscribed devices found for this zone — enable push first', r.sent > 0 ? 'info' : 'warning');
+});
+
+document.getElementById('go-citizen').addEventListener('click', () => location.href = 'citizen.html');
+document.getElementById('go-agent').addEventListener('click', () => location.href = 'agent.html');
+</script>
+</body>
+</html>
