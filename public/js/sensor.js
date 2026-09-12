@@ -92,11 +92,64 @@ function initControls() {
   bindSlider('slider-moisture', 'val-moisture', '%', v => apiPost('/simulation/soil-moisture', { risk_zone_id: sState.zoneId, soil_moisture: v }));
   bindSlider('slider-movement', 'val-movement', 'mm', v => apiPost('/simulation/ground-movement', { risk_zone_id: sState.zoneId, ground_movement_mm: v }));
 
-  let satOn = false;
+  const scenarioSelect = document.getElementById('sensor-sat-scenario');
+  const afterImg = document.getElementById('sensor-sat-after-img');
+  if (scenarioSelect && afterImg) {
+    scenarioSelect.addEventListener('change', () => {
+      if (scenarioSelect.value === 'BASELINE') {
+        afterImg.src = '/img/satellite/sector1_before.jpg';
+        afterImg.style.borderColor = 'var(--green)';
+      } else if (scenarioSelect.value === 'SECTOR2_BARAIL') {
+        afterImg.src = '/img/satellite/sector2_after.jpg';
+        afterImg.style.borderColor = 'var(--red)';
+      } else {
+        afterImg.src = '/img/satellite/sector1_after.jpg';
+        afterImg.style.borderColor = 'var(--red)';
+      }
+    });
+  }
+
+  const satUploadInput = document.getElementById('sensor-sat-upload');
+  let uploadedSatBase64 = null;
+  if (satUploadInput) {
+    satUploadInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        uploadedSatBase64 = evt.target.result;
+        if (afterImg) afterImg.src = evt.target.result;
+        toast('Custom satellite pass loaded — click Run Satellite Analysis', 'info');
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
   document.getElementById('btn-satellite').addEventListener('click', async () => {
-    satOn = !satOn;
-    try { showResult(await apiPost('/simulation/satellite-change', { risk_zone_id: sState.zoneId, enabled: satOn })); }
-    catch (e) { toast(e.message, 'critical'); }
+    const scenario = scenarioSelect?.value || 'CATASTROPHIC_SLIDE';
+    const statusEl = document.getElementById('sat-sensor-status');
+    if (statusEl) statusEl.textContent = '⏳ Processing bi-temporal pass & InSAR fringes...';
+    try {
+      let res;
+      if (uploadedSatBase64) {
+        res = await apiPost('/satellite/analyze-custom', {
+          risk_zone_id: sState.zoneId,
+          after_image_base64: uploadedSatBase64
+        });
+      } else {
+        res = await apiPost('/satellite/analyze', { risk_zone_id: sState.zoneId, scenario_type: scenario });
+      }
+      if (afterImg && res.satellite?.after_image_url) afterImg.src = res.satellite.after_image_url;
+      if (statusEl) {
+        statusEl.innerHTML = `<strong style="color:${res.satellite.change_detected ? 'var(--red)' : 'var(--green)'}">
+          ${res.satellite.change_detected ? `🚨 Scar: ${(res.satellite.scar_area_sqm || 0).toLocaleString()} m² (-${res.satellite.vegetation_loss_pct}% NDVI)` : '✅ Stable baseline'}
+        </strong>`;
+      }
+      showResult(res.pipeline);
+      toast('Satellite pass verified: Confidence & risk score updated!', 'info');
+    } catch (e) {
+      toast(e.message, 'critical');
+    }
   });
 
   document.getElementById('btn-seismic').addEventListener('click', async () => {

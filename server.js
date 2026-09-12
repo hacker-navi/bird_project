@@ -36,8 +36,9 @@ async function bootstrap() {
   attachEscalationIO(io);
 
   app.use(cors());
-  // Increased limit for base64 image uploads (max 8mb)
-  app.use(bodyParser.json({ limit: '8mb' }));
+  // Increased limit for base64 high-resolution satellite & photo uploads (max 25mb)
+  app.use(bodyParser.json({ limit: '25mb' }));
+  app.use(bodyParser.urlencoded({ extended: true, limit: '25mb' }));
   app.use(express.static(path.join(__dirname, 'public')));
 
   app.get('/api/health', (req, res) => {
@@ -60,6 +61,7 @@ async function bootstrap() {
   app.use('/api', require('./routes/simulation'));
   app.use('/api', require('./routes/analytics'));
   app.use('/api', require('./routes/push'));
+  app.use('/api', require('./routes/satellite'));
 
   // Centralized error handler
   app.use((err, req, res, next) => {

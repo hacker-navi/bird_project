@@ -66,17 +66,15 @@ router.post('/simulation/satellite-change', async (req, res) => {
   const { risk_zone_id, enabled } = req.body;
   if (!risk_zone_id) return res.status(400).json({ error: 'risk_zone_id required' });
 
-  const surfaceChange = enabled ? 18 : 3;
-  const vegChange = enabled ? 15 : 2;
-  const wetness = enabled ? 55 : 20;
+  const { recordSatellitePass } = require('../services/satelliteService');
+  const scenarioKey = enabled ? 'CATASTROPHIC_SLIDE' : 'BASELINE';
+  const satRecord = await recordSatellitePass(risk_zone_id, scenarioKey);
 
-  await SatelliteData.create({
-    risk_zone_id, vegetation_change: vegChange, surface_change: surfaceChange, wetness_index: wetness,
-    land_disturbance: enabled ? 12 : 4, source: 'SIMULATOR', status: 'SIMULATED'
+  const result = await runPipeline(risk_zone_id, {
+    triggeredBy: 'SENSOR_OPERATOR',
+    reason: `Satellite pass (${scenarioKey}): ${satRecord.change_detected ? `Debris scar ${(satRecord.scar_area_sqm || 0).toLocaleString()} m² (-${satRecord.vegetation_loss_pct}% NDVI)` : 'Baseline stable'}`
   });
-
-  const result = await runPipeline(risk_zone_id, { triggeredBy: 'SENSOR_OPERATOR', reason: `Satellite surface change ${enabled ? 'detected' : 'cleared'}` });
-  res.json(result);
+  res.json({ satellite: satRecord, pipeline: result });
 });
 
 // ---- Seismic activity ----

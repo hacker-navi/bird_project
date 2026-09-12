@@ -21,6 +21,7 @@
   <nav class="topnav" id="topnav">
     <button data-view="overview" class="active">Dashboard</button>
     <button data-view="map">Risk Map</button>
+    <button data-view="satellite">🛰 Satellite Surveillance</button>
     <button data-view="zones">Risk Zones</button>
     <button data-view="reports">Citizen Reports</button>
     <button data-view="operations">Emergency Ops</button>
@@ -87,6 +88,184 @@
     <div class="card">
       <div class="card__head"><h2>Risk Zones</h2></div>
       <div class="zone-list" id="map-zone-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== SATELLITE SURVEILLANCE ===================== -->
+<div class="view" id="view-satellite">
+  <div class="section-head">
+    <div>
+      <h1>🛰 Orbital Earth Observation &amp; Change Detection</h1>
+      <p>Copernicus Sentinel-2 (Multispectral Optical) &amp; Sentinel-1 (C-SAR InSAR) Bi-Temporal Surveillance</p>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center;">
+      <select id="sat-zone-selector" style="padding:6px 12px; font-size:12px; border-radius:3px; background:#fff; border:1px solid var(--line);"></select>
+      <button class="btn btn-primary btn-sm" id="btn-trigger-sat-pass">🛰 Refresh Satellite Pass</button>
+    </div>
+  </div>
+
+  <div class="grid-2" style="grid-template-columns: 1.6fr 1fr; gap:16px;">
+    <!-- LEFT: Interactive Split Comparison Viewer -->
+    <div class="card" style="padding:14px; background:#0b1120; border-color:#1e293b;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div style="color:#fff; font-weight:600; font-size:13px; display:flex; align-items:center; gap:6px;">
+          <span>Sentinel-2 Bi-Temporal Change Detection</span>
+          <span class="badge" style="background:#0284c7; color:#fff; font-size:10px;">10m Resolution</span>
+        </div>
+        <!-- Spectral Band Toggle Buttons -->
+        <div style="display:flex; gap:6px;">
+          <button class="btn btn-sm btn-outline active-band" id="band-rgb" style="font-size:11px; color:#fff; border-color:#475569; background:#1e293b;">True Color (RGB)</button>
+          <button class="btn btn-sm btn-outline" id="band-ndvi" style="font-size:11px; color:#94a3b8; border-color:#475569;">NDVI Infrared</button>
+          <button class="btn btn-sm btn-outline" id="band-insar" style="font-size:11px; color:#94a3b8; border-color:#475569;">InSAR Fringes</button>
+        </div>
+      </div>
+
+      <!-- The Interactive Split Slider Box -->
+      <div class="sat-viewer-box" id="sat-viewer-box">
+        <!-- Before Layer (Full Width underneath) -->
+        <img src="/img/satellite/sector1_before.jpg" alt="Pre-landslide satellite image" class="sat-img-layer" id="sat-img-before">
+        <span class="sat-label-tag sat-label-before">📅 Pre-Disaster Pass</span>
+
+        <!-- After Layer (Clipped wrapper) -->
+        <div class="sat-img-after-wrapper" id="sat-after-wrap">
+          <img src="/img/satellite/sector1_after.jpg" alt="Post-landslide satellite image" id="sat-img-after">
+          <span class="sat-label-tag sat-label-after">🚨 Post-Disaster Pass (Scar Detected)</span>
+        </div>
+
+        <!-- Draggable Handle Indicator -->
+        <div class="sat-handle" id="sat-handle" style="left:50%;">↔</div>
+
+        <!-- The actual range input controlling the split -->
+        <input type="range" min="0" max="100" value="50" class="sat-range-input" id="sat-split-slider" aria-label="Satellite comparison slider">
+      </div>
+
+      <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:11px; color:#64748b;">
+        <span>◀ Drag left to reveal Post-Landslide scar</span>
+        <span>Drag right to inspect Pre-Landslide forest ▶</span>
+      </div>
+
+      <!-- Telemetry HUD Bar -->
+      <div class="sat-hud" style="margin-top:12px; border-radius:4px;">
+        <div class="sat-hud-card">
+          <div class="sat-hud-lbl">NDVI Loss</div>
+          <div class="sat-hud-val alert" id="sat-val-ndvi">-56.8%</div>
+          <div class="sat-hud-sub" id="sat-sub-ndvi">0.74 ➔ 0.32 Index</div>
+        </div>
+        <div class="sat-hud-card">
+          <div class="sat-hud-lbl">Debris Scar Area</div>
+          <div class="sat-hud-val alert" id="sat-val-scar">18,450 m²</div>
+          <div class="sat-hud-sub">Mass Wasting Runout</div>
+        </div>
+        <div class="sat-hud-card">
+          <div class="sat-hud-lbl">InSAR Displacement</div>
+          <div class="sat-hud-val alert" id="sat-val-insar">28.4 cm</div>
+          <div class="sat-hud-sub">Line-of-Sight Shift</div>
+        </div>
+        <div class="sat-hud-card">
+          <div class="sat-hud-lbl">Confidence Boost</div>
+          <div class="sat-hud-val good" id="sat-val-conf">+18%</div>
+          <div class="sat-hud-sub">Orbital Corroboration</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Automated Satellite Analysis & Intelligence Panel -->
+    <div style="display:flex; flex-direction:column; gap:14px;">
+      <div class="card">
+        <div class="card__head">
+          <h2>Orbital Verification Analysis</h2>
+          <span class="badge red" id="sat-badge-status">VERIFIED LANDSLIDE</span>
+        </div>
+        <p style="font-size:12.5px; line-height:1.6; color:var(--ink-800);" id="sat-ai-summary">
+          Bi-temporal Sentinel-2 spectral differencing detected a catastrophic mass-wasting event. Exposed bedrock and liquid mudflow signature completely severed the NH-40 highway corridor with extensive debris sedimentation in the downstream river basin.
+        </p>
+        <div class="hr"></div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:12px;">
+          <div><span class="muted">Satellite Sensor:</span><br><strong id="sat-mission-name">Sentinel-2 (MSI) &amp; Sentinel-1 (C-SAR)</strong></div>
+          <div><span class="muted">InSAR Coherence:</span><br><strong id="sat-insar-coherence">0.38 (Severe Loss)</strong></div>
+          <div><span class="muted">Baseline Pass:</span><br><strong id="sat-pass-before">14 days ago</strong></div>
+          <div><span class="muted">Latest Pass:</span><br><strong id="sat-pass-after">Today (3h ago)</strong></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card__head"><h2>Satellite Pass Scenario Switcher</h2></div>
+        <p class="muted" style="font-size:11.5px; margin-top:-4px;">Simulate orbital passes to test the platform's multi-source corroboration and confidence engine.</p>
+        <div style="display:flex; flex-direction:column; gap:8px; margin-top:8px;">
+          <button class="btn btn-outline" id="btn-sat-catastrophic" style="text-align:left; padding:10px 12px;">
+            <strong style="color:var(--red);">🚨 Trigger Catastrophic Landslide Pass</strong><br>
+            <span class="muted" style="font-size:11px;">18,450 m² scar, -56.8% NDVI, 28.4 cm InSAR displacement</span>
+          </button>
+          <button class="btn btn-outline" id="btn-sat-creep" style="text-align:left; padding:10px 12px;">
+            <strong style="color:var(--amber);">⚠️ Trigger Active Slope Creep Pass</strong><br>
+            <span class="muted" style="font-size:11px;">4,800 m² tension crack, -21.6% NDVI, 8.6 cm InSAR velocity</span>
+          </button>
+          <button class="btn btn-outline" id="btn-sat-baseline" style="text-align:left; padding:10px 12px;">
+            <strong style="color:var(--green);">✅ Reset to Baseline Pristine Forest</strong><br>
+            <span class="muted" style="font-size:11px;">Intact forest canopy, NDVI 0.76, 0.4 cm background noise</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- CARD 3: LIVE MANUAL SATELLITE IMAGERY UPLOAD & MULTIMODAL AI ANALYSIS -->
+      <div class="card" style="border: 1px solid var(--amber); background: #fdfaf3;">
+        <div class="card__head">
+          <h2 style="display:flex; align-items:center; gap:6px;">
+            <span>📸 Live Manual Satellite Imagery &amp; AI Analysis</span>
+            <span class="badge" style="background:var(--amber); color:#fff; font-size:10px;">Dynamic</span>
+          </h2>
+        </div>
+        <p class="muted" style="font-size:11.5px; margin-top:-4px;">
+          Upload real pre/post disaster satellite or aerial photography. The platform executes multimodal Vision AI &amp; pixel spectral differencing to compute live scar geometry, NDVI loss, and confidence.
+        </p>
+
+        <!-- Two Image Upload Pickers -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
+          <!-- Pre-Landslide Box -->
+          <div style="background:#fff; border:1px dashed var(--line); border-radius:4px; padding:8px; text-align:center;">
+            <div style="font-size:11px; font-weight:600; color:var(--ink-800); margin-bottom:4px;">📅 Pre-Disaster Image</div>
+            <div style="width:100%; height:80px; background:#f1f5f9; border-radius:3px; overflow:hidden; display:flex; align-items:center; justify-content:center; margin-bottom:6px;">
+              <img id="manual-prev-before" src="/img/satellite/sector1_before.jpg" alt="Pre-disaster preview" style="width:100%; height:100%; object-fit:cover;">
+            </div>
+            <label class="btn btn-outline btn-sm" style="font-size:10.5px; padding:3px 8px; cursor:pointer; display:block;">
+              📁 Upload Before
+              <input type="file" id="input-sat-before" accept="image/*" style="display:none;">
+            </label>
+          </div>
+
+          <!-- Post-Landslide Box -->
+          <div style="background:#fff; border:1px dashed var(--red); border-radius:4px; padding:8px; text-align:center;">
+            <div style="font-size:11px; font-weight:600; color:var(--red); margin-bottom:4px;">🚨 Post-Disaster Image</div>
+            <div style="width:100%; height:80px; background:#f1f5f9; border-radius:3px; overflow:hidden; display:flex; align-items:center; justify-content:center; margin-bottom:6px;">
+              <img id="manual-prev-after" src="/img/satellite/sector1_after.jpg" alt="Post-disaster preview" style="width:100%; height:100%; object-fit:cover;">
+            </div>
+            <label class="btn btn-outline btn-sm" style="font-size:10.5px; padding:3px 8px; cursor:pointer; display:block; color:var(--red); border-color:var(--red);">
+              📁 Upload After
+              <input type="file" id="input-sat-after" accept="image/*" style="display:none;">
+            </label>
+          </div>
+        </div>
+
+        <!-- Preset Sector Pairs for Quick Demo -->
+        <div style="margin-top:10px;">
+          <div style="font-size:11px; color:var(--slate-500); margin-bottom:4px;">Or load real regional satellite pairs:</div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="btn btn-sm btn-outline" id="btn-pair-meghalaya" style="font-size:10.5px; padding:4px 8px;">Meghalaya NH-40</button>
+            <button class="btn btn-sm btn-outline" id="btn-pair-barail" style="font-size:10.5px; padding:4px 8px;">Assam Barail</button>
+            <button class="btn btn-sm btn-outline" id="btn-pair-pristine" style="font-size:10.5px; padding:4px 8px;">Pristine Forest</button>
+          </div>
+        </div>
+
+        <!-- Execute AI Analysis Button -->
+        <button class="btn btn-primary" id="btn-run-manual-sat-ai" style="width:100%; margin-top:12px; font-weight:600; padding:10px;">
+          ⚡ Run Live AI Orbital Change Detection
+        </button>
+
+        <div id="sat-ai-loading" style="display:none; margin-top:8px; font-size:11.5px; color:var(--amber); text-align:center;">
+          ⏳ Executing Multimodal Vision AI &amp; Spectral Differencing...
+        </div>
+      </div>
     </div>
   </div>
 </div>

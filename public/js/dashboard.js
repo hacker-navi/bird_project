@@ -33,6 +33,7 @@ document.querySelectorAll('#topnav button').forEach(btn => {
 
 function onViewShown(view) {
   if (view === 'map') { initMainMap(); renderMapZoneList(); }
+  if (view === 'satellite') loadSatelliteView();
   if (view === 'zones') renderZonesList();
   if (view === 'reports') loadReports();
   if (view === 'operations') loadOperations();
@@ -724,6 +725,378 @@ function exportDashboard() {
   setTimeout(() => w.print(), 500);
 }
 
+// ── SATELLITE SURVEILLANCE & CHANGE DETECTION ──────────────────────────────
+let satState = {
+  currentProfile: null,
+  activeBand: 'rgb',
+  splitPct: 50
+};
+
+function initSatelliteViewer() {
+  const slider = document.getElementById('sat-split-slider');
+  const afterWrap = document.getElementById('sat-after-wrap');
+  const handle = document.getElementById('sat-handle');
+
+  if (slider && afterWrap && handle) {
+    slider.addEventListener('input', (e) => {
+      const val = e.target.value;
+      satState.splitPct = val;
+      afterWrap.style.width = val + '%';
+      handle.style.left = val + '%';
+    });
+  }
+
+  // Spectral band toggles
+  const bandRgb = document.getElementById('band-rgb');
+  const bandNdvi = document.getElementById('band-ndvi');
+  const bandInsar = document.getElementById('band-insar');
+  const imgBefore = document.getElementById('sat-img-before');
+  const imgAfter = document.getElementById('sat-img-after');
+
+  function setBand(mode) {
+    satState.activeBand = mode;
+    [bandRgb, bandNdvi, bandInsar].forEach(b => {
+      if (b) {
+        b.style.background = 'none';
+        b.style.color = '#94a3b8';
+      }
+    });
+    if (imgBefore) imgBefore.className = 'sat-img-layer';
+    if (imgAfter) imgAfter.className = '';
+
+    if (mode === 'rgb') {
+      if (bandRgb) { bandRgb.style.background = '#1e293b'; bandRgb.style.color = '#fff'; }
+    } else if (mode === 'ndvi') {
+      if (bandNdvi) { bandNdvi.style.background = '#059669'; bandNdvi.style.color = '#fff'; }
+      if (imgBefore) imgBefore.classList.add('sat-filter-ndvi');
+      if (imgAfter) imgAfter.classList.add('sat-filter-ndvi');
+    } else if (mode === 'insar') {
+      if (bandInsar) { bandInsar.style.background = '#d97706'; bandInsar.style.color = '#fff'; }
+      if (imgBefore) imgBefore.classList.add('sat-filter-insar');
+      if (imgAfter) imgAfter.classList.add('sat-filter-insar');
+    }
+  }
+
+  if (bandRgb) bandRgb.addEventListener('click', () => setBand('rgb'));
+  if (bandNdvi) bandNdvi.addEventListener('click', () => setBand('ndvi'));
+  if (bandInsar) bandInsar.addEventListener('click', () => setBand('insar'));
+
+  // Scenario Buttons
+  const btnCatastrophic = document.getElementById('btn-sat-catastrophic');
+  const btnCreep = document.getElementById('btn-sat-creep');
+  const btnBaseline = document.getElementById('btn-sat-baseline');
+  const btnRefresh = document.getElementById('btn-trigger-sat-pass');
+  const zoneSelect = document.getElementById('sat-zone-selector');
+
+  if (zoneSelect) {
+    zoneSelect.addEventListener('change', () => {
+      loadSatelliteForZone(zoneSelect.value);
+    });
+  }
+
+  async function triggerScenario(scenarioType) {
+    const zoneId = zoneSelect?.value || state.selectedZoneId || state.zones[0]?.id;
+    if (!zoneId) return toast('Please select a risk zone', 'warning');
+
+    toast(`Analyzing Sentinel-2 & InSAR pass (${scenarioType})...`, 'info');
+    try {
+      const res = await apiPost('/satellite/analyze', { risk_zone_id: zoneId, scenario_type: scenarioType });
+      updateSatelliteUI(res.satellite);
+      toast('Satellite pass analyzed: Confidence & risk updated!', 'info');
+      await loadZones();
+      await loadSummary();
+    } catch (err) {
+      toast('Satellite analysis error: ' + err.message, 'critical');
+    }
+  }
+
+  if (btnCatastrophic) btnCatastrophic.addEventListener('click', () => triggerScenario('CATASTROPHIC_SLIDE'));
+  if (btnCreep) btnCreep.addEventListener('click', () => triggerScenario('MODERATE_CREEP'));
+  if (btnBaseline) btnBaseline.addEventListener('click', () => triggerScenario('BASELINE'));
+  if (btnRefresh) btnRefresh.addEventListener('click', () => triggerScenario('CATASTROPHIC_SLIDE'));
+
+  // ── MANUAL LIVE SATELLITE IMAGERY UPLOAD & AI ANALYSIS ──
+  const inputBefore = document.getElementById('input-sat-before');
+  const inputAfter = document.getElementById('input-sat-after');
+  const prevBefore = document.getElementById('manual-prev-before');
+  const prevAfter = document.getElementById('manual-prev-after');
+  const btnRunAi = document.getElementById('btn-run-manual-sat-ai');
+  const aiLoading = document.getElementById('sat-ai-loading');
+
+  const btnMeghalaya = document.getElementById('btn-pair-meghalaya');
+  const btnBarail = document.getElementById('btn-pair-barail');
+  const btnPristine = document.getElementById('btn-pair-pristine');
+
+  let manualUpload = {
+    beforeBase64: null,
+    afterBase64: null,
+    beforeUrl: '/img/satellite/sector1_before.jpg',
+    afterUrl: '/img/satellite/sector1_after.jpg'
+  };
+
+  function setPreviewPair(bUrl, aUrl) {
+    manualUpload.beforeUrl = bUrl;
+    manualUpload.afterUrl = aUrl;
+    manualUpload.beforeBase64 = null;
+    manualUpload.afterBase64 = null;
+    if (prevBefore) prevBefore.src = bUrl;
+    if (prevAfter) prevAfter.src = aUrl;
+    if (imgBefore) imgBefore.src = bUrl;
+    if (imgAfter) imgAfter.src = aUrl;
+  }
+
+  if (btnMeghalaya) {
+    btnMeghalaya.addEventListener('click', () => {
+      setPreviewPair('/img/satellite/sector1_before.jpg', '/img/satellite/sector1_after.jpg');
+      toast('Loaded Meghalaya NH-40 satellite pair — click Run AI Change Detection', 'info');
+    });
+  }
+
+  if (btnBarail) {
+    btnBarail.addEventListener('click', () => {
+      setPreviewPair('/img/satellite/sector2_before.jpg', '/img/satellite/sector2_after.jpg');
+      toast('Loaded Assam Barail Range satellite pair — click Run AI Change Detection', 'info');
+    });
+  }
+
+  if (btnPristine) {
+    btnPristine.addEventListener('click', () => {
+      setPreviewPair('/img/satellite/sector1_before.jpg', '/img/satellite/sector1_before.jpg');
+      toast('Loaded Pristine Forest baseline pair — click Run AI Change Detection', 'info');
+    });
+  }
+
+  if (inputBefore) {
+    inputBefore.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        manualUpload.beforeBase64 = evt.target.result;
+        manualUpload.beforeUrl = evt.target.result;
+        if (prevBefore) prevBefore.src = evt.target.result;
+        if (imgBefore) imgBefore.src = evt.target.result;
+        toast('Pre-disaster image loaded into comparison viewer', 'info');
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  if (inputAfter) {
+    inputAfter.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        manualUpload.afterBase64 = evt.target.result;
+        manualUpload.afterUrl = evt.target.result;
+        if (prevAfter) prevAfter.src = evt.target.result;
+        if (imgAfter) imgAfter.src = evt.target.result;
+        toast('Post-disaster image loaded — ready for AI analysis!', 'warning');
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  if (btnRunAi) {
+    btnRunAi.addEventListener('click', async () => {
+      const zoneId = zoneSelect?.value || state.selectedZoneId || state.zones[0]?.id;
+      if (!zoneId) return toast('Please select a risk zone', 'warning');
+
+      btnRunAi.disabled = true;
+      if (aiLoading) aiLoading.style.display = 'block';
+      toast('Analyzing uploaded satellite imagery with Multimodal Vision AI...', 'info');
+
+      try {
+        // Fast client-side pixel scanning
+        const clientMetrics = await computeClientImageMetrics(
+          manualUpload.beforeBase64 || manualUpload.beforeUrl,
+          manualUpload.afterBase64 || manualUpload.afterUrl
+        );
+
+        const res = await apiPost('/satellite/analyze-custom', {
+          risk_zone_id: zoneId,
+          before_image_base64: manualUpload.beforeBase64,
+          after_image_base64: manualUpload.afterBase64,
+          before_image_url: manualUpload.beforeBase64 ? null : manualUpload.beforeUrl,
+          after_image_url: manualUpload.afterBase64 ? null : manualUpload.afterUrl,
+          client_metrics: clientMetrics
+        });
+
+        updateSatelliteUI(res.satellite);
+        toast(`✅ Orbital AI Analysis Complete: Scar ${(res.satellite.scar_area_sqm || 0).toLocaleString()} m² (Confidence +${res.satellite.confidence_boost}%)`, 'critical');
+        await loadZones();
+        await loadSummary();
+      } catch (err) {
+        toast('Satellite analysis failed: ' + err.message, 'critical');
+      } finally {
+        btnRunAi.disabled = false;
+        if (aiLoading) aiLoading.style.display = 'none';
+      }
+    });
+  }
+}
+
+// Client-side canvas spectral and pixel differencing scanner
+async function computeClientImageMetrics(beforeSrc, afterSrc) {
+  return new Promise((resolve) => {
+    try {
+      const img1 = new Image();
+      const img2 = new Image();
+      img1.crossOrigin = 'anonymous';
+      img2.crossOrigin = 'anonymous';
+
+      let loaded = 0;
+      const onDone = () => {
+        loaded++;
+        if (loaded < 2) return;
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const w = 120;
+        const h = 120;
+        canvas.width = w;
+        canvas.height = h;
+
+        ctx.drawImage(img1, 0, 0, w, h);
+        const data1 = ctx.getImageData(0, 0, w, h).data;
+
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(img2, 0, 0, w, h);
+        const data2 = ctx.getImageData(0, 0, w, h).data;
+
+        let diffPixels = 0;
+        let green1 = 0;
+        let green2 = 0;
+        const total = w * h;
+
+        for (let i = 0; i < data1.length; i += 4) {
+          const r1 = data1[i], g1 = data1[i + 1], b1 = data1[i + 2];
+          const r2 = data2[i], g2 = data2[i + 1], b2 = data2[i + 2];
+
+          green1 += Math.max(0, 2 * g1 - r1 - b1);
+          green2 += Math.max(0, 2 * g2 - r2 - b2);
+
+          const diff = Math.abs(r1 - r2) + Math.abs(g1 - g2) + Math.abs(b1 - b2);
+          if (diff > 50) diffPixels++;
+        }
+
+        const changeRatio = diffPixels / total;
+        const isIdentical = changeRatio < 0.05;
+
+        if (isIdentical) {
+          return resolve({
+            scar_area_sqm: 0,
+            vegetation_loss_pct: 2.1,
+            surface_displacement_cm: 0.4,
+            insar_coherence: 0.89,
+            confidence_boost: 0,
+            ndvi_baseline: 0.76,
+            ndvi_current: 0.74,
+            geological_summary: 'Optical & InSAR comparative inspection: Identical terrain signatures. No slope failure or debris runout detected.'
+          });
+        }
+
+        const vegLossPct = Math.min(76, Math.max(16, Math.round((1 - (green2 / (green1 || 1))) * 100)));
+        const scarArea = Math.round(changeRatio * 32000);
+        const displacement = Number((changeRatio * 38).toFixed(1));
+        const coherence = Math.max(0.24, Number((1 - changeRatio * 0.8).toFixed(2)));
+        const boost = Math.min(18, Math.max(10, Math.round(changeRatio * 20)));
+
+        resolve({
+          scar_area_sqm: Math.max(4500, scarArea),
+          vegetation_loss_pct: vegLossPct,
+          surface_displacement_cm: Math.max(6.5, displacement),
+          insar_coherence: coherence,
+          confidence_boost: boost,
+          ndvi_baseline: 0.74,
+          ndvi_current: Math.max(0.18, Number((0.74 * (1 - vegLossPct / 100)).toFixed(2))),
+          geological_summary: `Bi-temporal Earth Observation: Detected active slope mass wasting with ${(Math.max(4500, scarArea)).toLocaleString()} m² debris scar and -${vegLossPct}% canopy loss.`
+        });
+      };
+
+      img1.onload = onDone;
+      img2.onload = onDone;
+      img1.onerror = () => resolve({});
+      img2.onerror = () => resolve({});
+
+      img1.src = beforeSrc;
+      img2.src = afterSrc;
+    } catch (_) {
+      resolve({});
+    }
+  });
+}
+
+async function loadSatelliteView() {
+  const zoneSelect = document.getElementById('sat-zone-selector');
+  if (zoneSelect && state.zones.length) {
+    zoneSelect.innerHTML = state.zones.map(z => `<option value="${z.id}" ${z.id === (state.selectedZoneId || state.zones[0].id) ? 'selected' : ''}>${z.name} (${z.code})</option>`).join('');
+  }
+  const targetZoneId = zoneSelect?.value || state.selectedZoneId || state.zones[0]?.id;
+  if (targetZoneId) {
+    await loadSatelliteForZone(targetZoneId);
+  }
+}
+
+async function loadSatelliteForZone(zoneId) {
+  try {
+    const profile = await apiGet(`/satellite/zones/${zoneId}`);
+    updateSatelliteUI(profile);
+  } catch (err) {
+    console.error('[Satellite] Load error:', err);
+  }
+}
+
+function updateSatelliteUI(data) {
+  if (!data) return;
+  satState.currentProfile = data;
+
+  const imgBefore = document.getElementById('sat-img-before');
+  const imgAfter = document.getElementById('sat-img-after');
+  if (imgBefore && data.before_image_url) imgBefore.src = data.before_image_url;
+  if (imgAfter && data.after_image_url) imgAfter.src = data.after_image_url;
+
+  const prevBefore = document.getElementById('manual-prev-before');
+  const prevAfter = document.getElementById('manual-prev-after');
+  if (prevBefore && data.before_image_url) prevBefore.src = data.before_image_url;
+  if (prevAfter && data.after_image_url) prevAfter.src = data.after_image_url;
+
+  const valNdvi = document.getElementById('sat-val-ndvi');
+  const subNdvi = document.getElementById('sat-sub-ndvi');
+  const valScar = document.getElementById('sat-val-scar');
+  const valInsar = document.getElementById('sat-val-insar');
+  const valConf = document.getElementById('sat-val-conf');
+  const statusBadge = document.getElementById('sat-badge-status');
+  const summaryText = document.getElementById('sat-ai-summary');
+  const missionName = document.getElementById('sat-mission-name');
+  const insarCoherence = document.getElementById('sat-insar-coherence');
+
+  if (valNdvi) {
+    valNdvi.textContent = `-${data.vegetation_loss_pct || 0}%`;
+    valNdvi.className = (data.vegetation_loss_pct > 20) ? 'sat-hud-val alert' : 'sat-hud-val good';
+  }
+  if (subNdvi) subNdvi.textContent = `${(data.ndvi_baseline || 0.74).toFixed(2)} ➔ ${(data.ndvi_current || 0.32).toFixed(2)} Index`;
+  if (valScar) {
+    valScar.textContent = `${(data.scar_area_sqm || 0).toLocaleString()} m²`;
+    valScar.className = (data.scar_area_sqm > 0) ? 'sat-hud-val alert' : 'sat-hud-val good';
+  }
+  if (valInsar) {
+    valInsar.textContent = `${data.surface_displacement_cm || 0} cm`;
+    valInsar.className = (data.surface_displacement_cm > 2) ? 'sat-hud-val alert' : 'sat-hud-val good';
+  }
+  if (valConf) {
+    valConf.textContent = data.change_detected ? `+${data.confidence_boost || 18}%` : '+0%';
+  }
+  if (statusBadge) {
+    statusBadge.textContent = data.change_detected ? 'VERIFIED LANDSLIDE SCAR' : 'STABLE BASELINE';
+    statusBadge.className = data.change_detected ? 'badge red' : 'badge green';
+  }
+  if (summaryText && data.analysis_summary) summaryText.textContent = data.analysis_summary;
+  if (missionName && data.satellite_mission) missionName.textContent = data.satellite_mission;
+  if (insarCoherence) insarCoherence.textContent = `${data.insar_coherence || 0.42} (${data.change_detected ? 'Decorrelated' : 'High Coherence'})`;
+}
+
 // ── Boot ──────────────────────────────────────────────────────────────────────
 async function boot() {
   await loadZones();
@@ -732,6 +1105,7 @@ async function boot() {
   await loadOverviewAlerts();
   await loadOverviewReports();
   initDemoControls();
+  initSatelliteViewer();
   setInterval(loadSummary, 15000);
   setInterval(loadOverviewAlerts, 15000);
   setInterval(loadOverviewReports, 15000);

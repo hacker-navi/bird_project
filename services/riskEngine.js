@@ -55,8 +55,28 @@ async function computeDynamicTrigger(zoneId) {
   const rainfallScore = clamp((weather.rainfall_24h / 200) * 100);
   const soilMoistureScore = clamp(sensor.soil_moisture);
   const groundMovementScore = clamp((sensor.ground_movement_mm / 20) * 100);
-  const satelliteScore = clamp(sat.surface_change * 5 + sat.wetness_index * 0.5);
-  const seismicScore = clamp((eq.magnitude / 6) * 100 * (eq.distance_km < 50 ? 1 : 0.4));
+  // Dynamic Satellite calculation with Sentinel-2 & InSAR change detection
+  let satelliteScore = 0;
+  let satellitePassConfirmed = false;
+  let satelliteDetail = 'No change detected';
+  let satelliteBoost = 0;
+
+  if (sat) {
+    if (sat.change_detected) {
+      satellitePassConfirmed = true;
+      satelliteBoost = sat.confidence_boost || 16;
+      const vegLossScore = clamp((sat.vegetation_loss_pct || 0) * 1.2);
+      const scarScore = clamp(((sat.scar_area_sqm || 0) / 20000) * 100);
+      const insarScore = clamp(((sat.surface_displacement_cm || 0) / 30) * 100);
+      satelliteScore = clamp(vegLossScore * 0.40 + scarScore * 0.35 + insarScore * 0.25);
+      satelliteDetail = `Scar: ${(sat.scar_area_sqm || 0).toLocaleString()} m² | NDVI: -${sat.vegetation_loss_pct}% | InSAR: ${sat.surface_displacement_cm} cm`;
+    } else {
+      satelliteScore = clamp((sat.surface_change || 2) * 5 + (sat.wetness_index || 20) * 0.5);
+      satelliteDetail = `Stable: NDVI ${(sat.ndvi_current || 0.74).toFixed(2)} | InSAR: ${sat.surface_displacement_cm || 0.4} cm`;
+    }
+  }
+
+  const seismicScore = clamp((eq ? (eq.magnitude / 6) * 100 * (eq.distance_km < 50 ? 1 : 0.4) : 10));
 
   const score = clamp(
     rainfallScore * 0.30 +
@@ -69,11 +89,22 @@ async function computeDynamicTrigger(zoneId) {
   return {
     score,
     components: {
-      rainfall24h: { value: weather.rainfall_24h, unit: 'mm', contribution: rainfallScore, source: weather.source, status: weather.status },
-      soilMoisture: { value: sensor.soil_moisture, unit: '%', contribution: soilMoistureScore, source: sensor.source, status: sensor.status },
-      groundMovement: { value: sensor.ground_movement_mm, unit: 'mm', contribution: groundMovementScore, source: sensor.source, status: sensor.status },
-      satelliteSurfaceChange: { value: sat.surface_change, contribution: satelliteScore, source: sat.source, status: sat.status },
-      seismicActivity: { value: eq.magnitude, unit: 'Mw', contribution: seismicScore, source: eq.source, status: eq.status }
+      rainfall24h: { value: weather?.rainfall_24h ?? 0, unit: 'mm', contribution: rainfallScore, source: weather?.source ?? 'SIMULATOR', status: weather?.status ?? 'SIMULATED' },
+      soilMoisture: { value: sensor?.soil_moisture ?? 0, unit: '%', contribution: soilMoistureScore, source: sensor?.source ?? 'SIMULATOR', status: sensor?.status ?? 'SIMULATED' },
+      groundMovement: { value: sensor?.ground_movement_mm ?? 0, unit: 'mm', contribution: groundMovementScore, source: sensor?.source ?? 'SIMULATOR', status: sensor?.status ?? 'SIMULATED' },
+      satelliteSurfaceChange: {
+        value: sat?.surface_change ?? 0,
+        contribution: satelliteScore,
+        detail: satelliteDetail,
+        source: sat?.source ?? 'SENTINEL_COPERNICUS',
+        status: sat?.status ?? 'DEMO DATA',
+        confirmed: satellitePassConfirmed,
+        boost: satelliteBoost,
+        satRecord: sat ? sat.toJSON() : null
+      },
+      seismicActivity: { value: eq?.magnitude ?? 0, unit: 'Mw', contribution: seismicScore, source: eq?.source ?? 'MODELLED', status: eq?.status ?? 'MODELLED' },
+      satellitePassConfirmed,
+      satelliteConfidenceBoost: satelliteBoost
     }
   };
 }
@@ -179,14 +210,19 @@ function computeConfidence({ dynamic, evidence, staticLayer }) {
     : 0;
   const gpsBoost = evidence.hasGpsReport ? 5 : 0;
   const agentPhotoBoost = evidence.agentImageConfirmed ? 12 : 0;
+  
+  // NEW: Satellite orbital verification boost (Sentinel-2 & InSAR confirmation)
+  const satelliteBoost = dynamic.components.satellitePassConfirmed
+    ? Math.round(dynamic.components.satelliteConfidenceBoost || 16)
+    : 0;
 
   let confidence = (
-    dataAvailability * 0.30 +
-    freshness * 0.15 +
-    independentAgreement * 0.25 +
-    (evidence.score > 0 ? 60 : 30) * 0.15
+    dataAvailability * 0.26 +
+    freshness * 0.12 +
+    independentAgreement * 0.22 +
+    (evidence.score > 0 ? 60 : 30) * 0.14
   ) + evidenceBoost * 0.3 + fieldVerificationBoost * 0.4
-    + imageMatchBoost + gpsBoost + agentPhotoBoost;
+    + imageMatchBoost + gpsBoost + agentPhotoBoost + satelliteBoost;
 
   confidence = clamp(confidence, 20, 99);
   return Math.round(confidence);
@@ -211,7 +247,7 @@ async function calculateRisk(zoneId) {
     { name: 'Rainfall (24h)', contribution: dynamic.components.rainfall24h.contribution, layer: 'DYNAMIC', detail: `${dynamic.components.rainfall24h.value} mm`, source: dynamic.components.rainfall24h.source, status: dynamic.components.rainfall24h.status },
     { name: 'Soil Moisture', contribution: dynamic.components.soilMoisture.contribution, layer: 'DYNAMIC', detail: `${dynamic.components.soilMoisture.value}%`, source: dynamic.components.soilMoisture.source, status: dynamic.components.soilMoisture.status },
     { name: 'Ground Movement', contribution: dynamic.components.groundMovement.contribution, layer: 'DYNAMIC', detail: `${dynamic.components.groundMovement.value} mm`, source: dynamic.components.groundMovement.source, status: dynamic.components.groundMovement.status },
-    { name: 'Satellite Surface Change', contribution: dynamic.components.satelliteSurfaceChange.contribution, layer: 'DYNAMIC', detail: `index ${dynamic.components.satelliteSurfaceChange.value}`, source: dynamic.components.satelliteSurfaceChange.source, status: dynamic.components.satelliteSurfaceChange.status },
+    { name: 'Satellite Surface Change', contribution: dynamic.components.satelliteSurfaceChange.contribution, layer: 'DYNAMIC', detail: dynamic.components.satelliteSurfaceChange.detail || `index ${dynamic.components.satelliteSurfaceChange.value}`, source: dynamic.components.satelliteSurfaceChange.source, status: dynamic.components.satelliteSurfaceChange.status },
     { name: 'Seismic Activity', contribution: dynamic.components.seismicActivity.contribution, layer: 'DYNAMIC', detail: `${dynamic.components.seismicActivity.value} Mw`, source: dynamic.components.seismicActivity.source, status: dynamic.components.seismicActivity.status },
     { name: 'Slope', contribution: staticLayer.components.slope.contribution, layer: 'STATIC', detail: `${staticLayer.components.slope.value}°`, source: 'GIS/DEM', status: 'STATIC' },
     { name: 'Historical Landslides', contribution: staticLayer.components.historicalEvents.contribution, layer: 'STATIC', detail: `${staticLayer.components.historicalEvents.value} recorded events`, source: 'DISTRICT_RECORD', status: 'STATIC' },

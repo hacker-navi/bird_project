@@ -61,10 +61,41 @@
       </div>
 
       <div class="card">
-        <div class="card__head"><h2>Satellite &amp; Seismic</h2></div>
-        <div style="display:flex; gap:8px; margin-bottom:8px;">
-          <button class="btn btn-outline" id="btn-satellite" style="flex:1;">🛰 Toggle Surface Change</button>
+        <div class="card__head">
+          <h2>Satellite Earth Observation</h2>
+          <span class="badge" style="background:#0284c7;color:#fff;font-size:10px;">Sentinel-2 / InSAR</span>
         </div>
+        <p class="muted" style="font-size:11.5px;margin-top:-4px;">Bi-temporal orbital passes compare pre-event baseline vs post-event landslide scar.</p>
+        
+        <!-- Live Satellite Preview Thumbnail -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+          <div>
+            <div class="muted" style="font-size:10px;text-transform:uppercase;margin-bottom:2px;">Before Pass</div>
+            <img src="/img/satellite/sector1_before.jpg" alt="Before pass satellite image" style="width:100%;height:85px;object-fit:cover;border-radius:3px;border:1px solid var(--line);">
+          </div>
+          <div>
+            <div class="muted" style="font-size:10px;text-transform:uppercase;margin-bottom:2px;">After Pass (Scar)</div>
+            <img src="/img/satellite/sector1_after.jpg" alt="After pass satellite image" id="sensor-sat-after-img" style="width:100%;height:85px;object-fit:cover;border-radius:3px;border:1px solid var(--red);">
+          </div>
+        </div>
+
+        <label class="field-label">Satellite Pass Scenario</label>
+        <select id="sensor-sat-scenario" style="margin-bottom:8px;width:100%;font-size:12px;">
+          <option value="CATASTROPHIC_SLIDE">🚨 Sector 1: Meghalaya NH-40 Debris Slide (18,450 m² scar)</option>
+          <option value="SECTOR2_BARAIL">⛰️ Sector 2: Assam Barail Range Failure (14,800 m² scar)</option>
+          <option value="MODERATE_CREEP">⚠️ Active Slope Creep (4,800 m² tension crack, -21.6% NDVI)</option>
+          <option value="BASELINE">✅ Pristine Forest Baseline (No scar, NDVI 0.76, 0.4 cm)</option>
+        </select>
+        <div style="display:flex; gap:6px; margin-bottom:8px;">
+          <button class="btn btn-primary" id="btn-satellite" style="flex:1; font-size:11.5px;">🛰 Run Satellite Analysis</button>
+          <label class="btn btn-outline" style="font-size:11.5px; cursor:pointer; display:flex; align-items:center;">
+            📁 Upload
+            <input type="file" id="sensor-sat-upload" accept="image/*" style="display:none;">
+          </label>
+        </div>
+        <div id="sat-sensor-status" style="font-size:11px;color:var(--slate-500);margin-bottom:12px;">Status: Satellite data synchronized</div>
+
+        <div class="card__head" style="margin-top:6px;"><h2>Seismic Sensor</h2></div>
         <button class="btn btn-outline" id="btn-seismic" style="width:100%;">〰 Trigger Seismic Event (M4.5)</button>
       </div>
 
