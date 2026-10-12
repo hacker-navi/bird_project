@@ -24,7 +24,7 @@ const idTransformPlugin = (schema) => {
 mongoose.plugin(idTransformPlugin);
 
 async function connectDB() {
-  const uri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/nerlirp';
+  const uri = process.env.MONGODB_URI;
   mongoose.set('strictQuery', true);
   // Fail fast (5s) with a clear error instead of hanging on the default 30s
   // server-selection timeout when MongoDB isn't reachable.
